@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('探测环境违法建设查处案卷台账')"/>
+</head>
+<body class="pear-container">
+
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" action="">
+            <div class="layui-form-item">
+                <label class="layui-form-label">卷号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="caseNo" class="layui-input">
+                </div>
+                <label class="layui-form-label">建筑物</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="buildingName" class="layui-input">
+                </div>
+                <label class="layui-form-label">当前段</label>
+                <div class="layui-input-inline">
+                    <select name="stage">
+                        <option value="">全部</option>
+                        <option value="1">受理</option>
+                        <option value="2">调查</option>
+                        <option value="3">告知</option>
+                        <option value="4">处理决定</option>
+                        <option value="5">复查</option>
+                        <option value="6">结案</option>
+                    </select>
+                </div>
+                <label class="layui-form-label">情形</label>
+                <div class="layui-input-inline">
+                    <select name="status">
+                        <option value="">全部</option>
+                        <option value="0">在办</option>
+                        <option value="1">已结案</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="metpCase-query">
+                    <i class="layui-icon layui-icon-search"></i> 查询
+                </button>
+                <button type="reset" class="pear-btn pear-btn-md">
+                    <i class="layui-icon layui-icon-refresh"></i> 重置
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="metpCase-table" lay-filter="metpCase-table"></table>
+    </div>
+</div>
+
+<!-- 受理建卷表单（进门只此一扇） -->
+<div id="acceptForm" style="display:none;padding:20px 20px 0 0;">
+    <form class="layui-form" id="acceptFormBody">
+        <div class="layui-form-item">
+            <label class="layui-form-label">建筑物</label>
+            <div class="layui-input-block">
+                <input type="text" name="buildingName" required lay-verify="required" class="layui-input" placeholder="违法建筑物名称（同名下有在办卷不再另开）">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">线索编号</label>
+            <div class="layui-input-block">
+                <input type="text" name="clueNo" class="layui-input" placeholder="违法线索清单转入编号">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">受理记载</label>
+            <div class="layui-input-block">
+                <textarea name="content" class="layui-textarea" placeholder="受理情况"></textarea>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- 调查段技术意见表单 -->
+<div id="investForm" style="display:none;padding:20px 20px 0 0;">
+    <form class="layui-form">
+        <div class="layui-form-item">
+            <label class="layui-form-label">水平距离(米)</label>
+            <div class="layui-input-block">
+                <input type="number" step="0.01" name="techDistance" required lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">所挡方位角</label>
+            <div class="layui-input-block">
+                <input type="text" name="techAzimuth" required lay-verify="required" class="layui-input" placeholder="如 270°">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">高出平台(米)</label>
+            <div class="layui-input-block">
+                <input type="number" step="0.01" name="techHeight" required lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">调查记载</label>
+            <div class="layui-input-block">
+                <textarea name="content" class="layui-textarea"></textarea>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- 告知段 / 重做告知 表单 -->
+<div id="noticeForm" style="display:none;padding:20px 20px 0 0;">
+    <form class="layui-form">
+        <div class="layui-form-item">
+            <label class="layui-form-label">应拆除高度(米)</label>
+            <div class="layui-input-block">
+                <input type="number" step="0.01" name="demolishHeight" required lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">告知记载</label>
+            <div class="layui-input-block">
+                <textarea name="content" class="layui-textarea"></textarea>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- 处理决定段表单 -->
+<div id="decisionForm" style="display:none;padding:20px 20px 0 0;">
+    <form class="layui-form">
+        <div class="layui-form-item">
+            <label class="layui-form-label">决定内容</label>
+            <div class="layui-input-block">
+                <textarea name="content" required lay-verify="required" class="layui-textarea" placeholder="处理决定内容（技术意见照录冻结值）"></textarea>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script type="text/html" id="metpCase-toolbar">
+    <button shiro:hasPermission="metpCase:accept" class="pear-btn pear-btn-primary pear-btn-md" lay-event="accept">
+        <i class="layui-icon layui-icon-add-1"></i> 线索转入受理
+    </button>
+</script>
+
+<script type="text/html" id="metpCase-stage">
+    {{# if(d.stage===6){ }}<span class="layui-badge layui-bg-gray">结案(死卷)</span>
+    {{# }else{ }}<span class="layui-badge layui-bg-blue">{{d.stageName}}</span>{{# } }}
+</script>
+
+<script type="text/html" id="metpCase-bar">
+    <a class="pear-btn pear-btn-primary pear-btn-sm" lay-event="detail"><i class="layui-icon layui-icon-about"></i> 查处经过</a>
+    {{# if(d.stage===2){ }}
+    <button shiro:hasPermission="metpCase:submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="invest"><i class="layui-icon layui-icon-edit"></i> 调查递交</button>
+    {{# } }}
+    {{# if(d.stage===3 && d.noticeRedo!==true){ }}
+    <button shiro:hasPermission="metpCase:submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="notice">告知递交</button>
+    {{# } }}
+    {{# if(d.stage===3 && d.noticeRedo===true){ }}
+    <button shiro:hasPermission="metpCase:submit" class="pear-btn pear-btn-warming pear-btn-sm" lay-event="redoNotice">告知重做递交</button>
+    {{# } }}
+    {{# if(d.stage===4){ }}
+    <button shiro:hasPermission="metpCase:submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="decision">处理决定递交</button>
+    {{# } }}
+    {{# if(d.stage===5){ }}
+    <button shiro:hasPermission="metpCase:sign" class="pear-btn pear-btn-sm {{ d.reviewOfficerSign===1 ? 'pear-btn-disabled' : 'pear-btn-normal' }}" lay-event="signOfficer" {{ d.reviewOfficerSign===1 ? 'disabled' : '' }}>承办人点头{{ d.reviewOfficerSign===1 ? '✓' : '' }}</button>
+    <button shiro:hasPermission="metpCase:sign" class="pear-btn pear-btn-sm {{ d.reviewChiefSign===1 ? 'pear-btn-disabled' : 'pear-btn-normal' }}" lay-event="signChief" {{ d.reviewChiefSign===1 ? 'disabled' : '' }}>台站长点头{{ d.reviewChiefSign===1 ? '✓' : '' }}</button>
+    <button shiro:hasPermission="metpCase:return" class="pear-btn pear-btn-danger pear-btn-sm" lay-event="returnNotice">拆除高度不符退回</button>
+    <button shiro:hasPermission="metpCase:close" class="pear-btn pear-btn-sm {{ (d.reviewOfficerSign===1&&d.reviewChiefSign===1) ? 'pear-btn-success' : 'pear-btn-disabled' }}" lay-event="close" {{ (d.reviewOfficerSign===1&&d.reviewChiefSign===1) ? '' : 'disabled' }}>结案</button>
+    {{# } }}
+</script>
+
+<th:block th:include="include :: footer"/>
+<script th:inline="javascript">
+    layui.use(['table', 'form', 'jquery', 'layer'], function () {
+        let table = layui.table, form = layui.form, $ = layui.jquery, layer = layui.layer;
+        let MODULE_PATH = rootPath + "/metpCase";
+
+        table.render({
+            elem: '#metpCase-table',
+            url: MODULE_PATH + '/list',
+            page: true, method: 'get', skin: 'line',
+            toolbar: '#metpCase-toolbar',
+            cols: [[
+                {field: 'caseNo', title: '卷号', width: 160, align: 'center'},
+                {field: 'buildingName', title: '违法建筑物', minWidth: 200},
+                {field: 'clueNo', title: '线索编号', width: 130, align: 'center'},
+                {field: 'stageName', title: '当前段', width: 120, align: 'center', toolbar: '#metpCase-stage'},
+                {field: 'prevOperator', title: '上一段办理人', width: 120, align: 'center'},
+                {field: 'createBy', title: '建卷人', width: 110, align: 'center'},
+                {field: 'createTime', title: '建卷时间', width: 170, align: 'center'},
+                {title: '办理', width: 460, align: 'left', toolbar: '#metpCase-bar'}
+            ]]
+        });
+
+        form.on('submit(metpCase-query)', function (data) {
+            table.reload('metpCase-table', {where: data.field, page: {curr: 1}});
+            return false;
+        });
+
+        function refresh() { table.reload('metpCase-table'); }
+
+        function openForm(elemId, title, onSubmit) {
+            layer.open({
+                type: 1, title: title, area: ['520px', '460px'], shade: 0.1,
+                content: $(elemId),
+                btn: ['递交', '取消'],
+                yes: function (index) {
+                    let data = {};
+                    $(elemId).find('input,textarea').each(function () {
+                        data[this.name] = this.value;
+                    });
+                    onSubmit(index, data);
+                },
+                end: function () { $(elemId).hide(); }
+            });
+        }
+
+        function post(url, data, okMsg, index) {
+            let loading = layer.load();
+            $.post(url, data, function (res) {
+                layer.close(loading);
+                if (res.code === 200) {
+                    layer.msg(okMsg || res.msg, {icon: 1, time: 1200}, function () {
+                        if (index) layer.close(index);
+                        refresh();
+                    });
+                } else {
+                    layer.msg(res.msg, {icon: 2, time: 2500});
+                }
+            }).fail(function () { layer.close(loading); layer.msg('接口回话异常', {icon: 2}); });
+        }
+
+        table.on('toolbar(metpCase-table)', function (obj) {
+            if (obj.event === 'accept') {
+                layer.open({
+                    type: 1, title: '违法线索转入 · 受理建卷（一卷一号）', area: ['520px', '420px'],
+                    content: $('#acceptForm'),
+                    btn: ['受理建卷', '取消'],
+                    yes: function (index) {
+                        let data = {};
+                        $('#acceptFormBody').find('input,textarea').each(function () { data[this.name] = this.value; });
+                        if (!data.buildingName) { layer.msg('建筑物名称必填', {icon: 2}); return; }
+                        post(MODULE_PATH + '/accept', data, '已受理建卷', index);
+                    },
+                    end: function () { $('#acceptForm').hide(); }
+                });
+            }
+        });
+
+        table.on('tool(metpCase-table)', function (obj) {
+            let d = obj.data;
+            if (obj.event === 'detail') {
+                layer.open({type: 2, title: '查处经过 · ' + d.caseNo, area: ['960px', '640px'], shade: 0.1,
+                    content: MODULE_PATH + '/detail/' + d.id});
+            } else if (obj.event === 'invest') {
+                openForm('#investForm', '调查段 · 技术意见（进告知即冻结）', function (index, data) {
+                    data.id = d.id; post(MODULE_PATH + '/submit', data, '调查已递交，技术意见冻结', index);
+                });
+            } else if (obj.event === 'notice') {
+                openForm('#noticeForm', '告知段 · 载明应拆除高度', function (index, data) {
+                    data.id = d.id; post(MODULE_PATH + '/submit', data, '告知已递交', index);
+                });
+            } else if (obj.event === 'redoNotice') {
+                openForm('#noticeForm', '告知段重做（旧话作废留底，只摆此条）', function (index, data) {
+                    data.id = d.id; post(MODULE_PATH + '/redoNotice', data, '告知已重做，重入复查', index);
+                });
+            } else if (obj.event === 'decision') {
+                openForm('#decisionForm', '处理决定段', function (index, data) {
+                    data.id = d.id; post(MODULE_PATH + '/submit', data, '处理决定已递交，进入复查', index);
+                });
+            } else if (obj.event === 'signOfficer') {
+                post(MODULE_PATH + '/sign', {id: d.id, signRole: 'OFFICER'});
+            } else if (obj.event === 'signChief') {
+                post(MODULE_PATH + '/sign', {id: d.id, signRole: 'CHIEF'});
+            } else if (obj.event === 'returnNotice') {
+                layer.confirm('确认告知段拆除高度与调查记录对不上，退回告知段重做？旧话作废留底不抹。',
+                    {icon: 3, title: '退回'}, function (idx) {
+                        layer.close(idx);
+                        post(MODULE_PATH + '/returnNotice', {id: d.id});
+                    });
+            } else if (obj.event === 'close') {
+                layer.confirm('两头已点齐，确认结案？结案即死卷，不得再挂记事、不得抽卷抹账。省台重查须另立新号。',
+                    {icon: 3, title: '结案'}, function (idx) {
+                        layer.close(idx);
+                        post(MODULE_PATH + '/close', {id: d.id});
+                    });
+            }
+        });
+    });
+</script>
+</body>
+</html>

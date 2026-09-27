@@ -123,6 +123,75 @@ CREATE TABLE IF NOT EXISTS t_metp_submit_row (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='正点观测数据核收转存行';
 
+-- 探测环境违法建设查处案卷（chen-012）
+-- 一卷一号，六段顺序办理：受理 1 / 调查 2 / 告知 3 / 处理决定 4 / 复查 5 / 结案 6。
+-- 查处经过落 t_metp_case_record，只追加、不改不删；结案即死卷。
+
+CREATE TABLE IF NOT EXISTS t_metp_case (
+  id bigint NOT NULL COMMENT '主键',
+  case_no varchar(64) NOT NULL COMMENT '查处案卷号(一卷一号)',
+  clue_no varchar(64) DEFAULT NULL COMMENT '违法线索清单转入编号',
+  building_name varchar(255) NOT NULL COMMENT '违法建筑物名称(去重锚点)',
+  stage int NOT NULL DEFAULT '1' COMMENT '案卷当前所在段 1受理 2调查 3告知 4处理决定 5复查 6结案',
+  status int NOT NULL DEFAULT '0' COMMENT '案卷情形 0在办 1已结案(死卷)',
+  -- 调查段技术意见：一进告知段即冻结，此后各段照录
+  tech_distance decimal(12,2) DEFAULT NULL COMMENT '与仪器平台水平距离(米)',
+  tech_azimuth varchar(32) DEFAULT NULL COMMENT '所挡方位角',
+  tech_height decimal(12,2) DEFAULT NULL COMMENT '高出仪器平台米数',
+  tech_frozen int NOT NULL DEFAULT '0' COMMENT '技术意见冻结标记 0未冻结 1进告知段后冻结',
+  -- 告知段拆除意见（复查退回时在主表上换为重做值，旧值留底于 t_metp_case_record）
+  demolish_height decimal(12,2) DEFAULT NULL COMMENT '告知段载明的应拆除高度(米)',
+  -- 复查段：县局执法承办人与台站长各点头一次
+  review_officer_sign int NOT NULL DEFAULT '0' COMMENT '执法承办人复查点头 0未点 1已点',
+  review_chief_sign int NOT NULL DEFAULT '0' COMMENT '台站长复查点头 0未点 1已点',
+  accept_time datetime DEFAULT NULL COMMENT '受理建卷时刻',
+  close_time datetime DEFAULT NULL COMMENT '结案时刻(死卷落定)',
+  del_flag int NOT NULL DEFAULT '0' COMMENT '删除标记 恒为0：案卷不许抽删',
+  create_by varchar(64) DEFAULT NULL COMMENT '建卷人(系统自落)',
+  create_time datetime DEFAULT NULL COMMENT '建卷时间(系统自落)',
+  update_by varchar(64) DEFAULT NULL COMMENT '最近办理人(系统自落)',
+  update_time datetime DEFAULT NULL COMMENT '最近办理时间(系统自落)',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_case_no (case_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='探测环境违法建设查处案卷';
+
+-- 同一建筑物名下已有未结案卷的，不再另开第二卷：门禁行随卷建、随结案摘。
+CREATE TABLE IF NOT EXISTS t_metp_case_active (
+  id bigint NOT NULL COMMENT '主键',
+  building_name varchar(255) NOT NULL COMMENT '违法建筑物名称',
+  case_id bigint NOT NULL COMMENT '在办案卷主键',
+  case_no varchar(64) NOT NULL COMMENT '在办案卷号',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_active_building (building_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='在办查处案卷去重门禁(一建筑物一在办卷)';
+
+-- 查处经过：一卷从头到尾的每一笔。只许 INSERT，不许 UPDATE/DELETE。
+-- 退回重做时旧笔 voided=1 原样留底，页面只摆 current=1 的一条，旧话不抹。
+-- 复查点头的旧签名一律原封不动；退回后另起一回，由主表点头标记与 seq 先后区分新旧。
+CREATE TABLE IF NOT EXISTS t_metp_case_record (
+  id bigint NOT NULL COMMENT '主键',
+  case_id bigint NOT NULL COMMENT '所属案卷主键',
+  case_no varchar(64) NOT NULL COMMENT '案卷号',
+  seq int NOT NULL COMMENT '卷内次序(逐笔递增，查处经过按此正列/倒列)',
+  stage int NOT NULL COMMENT '本笔所在段 1..6',
+  action varchar(32) NOT NULL COMMENT '动作 SUBMIT递交 SIGN点头 RETURN退回重做 CLOSE结案',
+  current_flag int NOT NULL DEFAULT '1' COMMENT '该段当前生效记载 1页面摆出 0已被重做替换',
+  voided int NOT NULL DEFAULT '0' COMMENT '作废留底标记 0有效 1退回重做前的旧话(留底不抹)',
+  operator varchar(64) NOT NULL COMMENT '办理人(系统自落，不许补记)',
+  operate_time datetime(3) NOT NULL COMMENT '办理时刻(系统自落，精确到毫秒定先后)',
+  sign_role varchar(32) DEFAULT NULL COMMENT '点头角色 OFFICER执法承办人 CHIEF台站长',
+  tech_distance decimal(12,2) DEFAULT NULL COMMENT '本笔落定时的水平距离(米)',
+  tech_azimuth varchar(32) DEFAULT NULL COMMENT '本笔落定时的所挡方位角',
+  tech_height decimal(12,2) DEFAULT NULL COMMENT '本笔落定时的高出平台米数',
+  demolish_height decimal(12,2) DEFAULT NULL COMMENT '本笔落定时的应拆除高度(米)',
+  content varchar(1000) DEFAULT NULL COMMENT '该段记载内容',
+  PRIMARY KEY (id),
+  KEY idx_case_seq (case_id, seq)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='查处经过(只追加留底账)';
+
 -- 初始档案数据（id=1 启用 / id=2 停用）
 -- 两条初始档案：id=0 在册、id=1 已停测。
 -- 在册观测要素项数上限取 12/40/120 项（等于上限算高一档）。

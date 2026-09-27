@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:include="include :: header('查处经过')"/>
+    <style>
+        .case-head td{padding:6px 10px;border-bottom:1px dashed #e6e6e6;font-size:13px;}
+        .case-head .k{color:#888;width:110px;}
+        .voided{text-decoration:line-through;color:#bbb;}
+        .tag{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;}
+        .tag-submit{background:#e8f1ff;color:#1e6fff;}
+        .tag-sign{background:#e9f7ec;color:#2e9e4b;}
+        .tag-return{background:#fff3e0;color:#e68400;}
+        .tag-close{background:#f0f0f0;color:#666;}
+        .seg{display:inline-block;min-width:64px;text-align:center;border-radius:3px;background:#f2f4f8;padding:1px 6px;}
+    </style>
+</head>
+<body class="pear-container" style="padding:14px;">
+
+<div class="layui-card" th:with="c=${vo.caseInfo}">
+    <div class="layui-card-header">
+        <span th:text="'案卷号 ' + ${c.caseNo}"></span>
+        <span class="layui-badge layui-bg-blue" style="margin-left:10px;" th:text="${c.stageName}"></span>
+        <span class="layui-badge layui-bg-gray" th:if="${c.status==1}">已结案·死卷</span>
+        <span class="layui-badge" th:if="${c.status==0}">在办</span>
+    </div>
+    <div class="layui-card-body">
+        <table class="case-head" style="width:100%;border-collapse:collapse;">
+            <tr>
+                <td class="k">违法建筑物</td><td th:text="${c.buildingName}"></td>
+                <td class="k">线索编号</td><td th:text="${c.clueNo} ?: '—'"></td>
+            </tr>
+            <tr>
+                <td class="k">与平台水平距离</td><td th:text="${c.techDistance} ?: '调查段未定'"></td>
+                <td class="k">所挡方位角</td><td th:text="${c.techAzimuth} ?: '—'"></td>
+            </tr>
+            <tr>
+                <td class="k">高出平台(米)</td><td th:text="${c.techHeight} ?: '—'"></td>
+                <td class="k">技术意见</td><td>
+                    <span th:if="${c.techFrozen==1}" class="tag tag-sign">已冻结（各段照录，中途改不得）</span>
+                    <span th:unless="${c.techFrozen==1}">未冻结（调查段递交后进告知即冻结）</span>
+                </td>
+            </tr>
+            <tr>
+                <td class="k">应拆除高度(米)</td><td th:text="${c.demolishHeight} ?: '—'"></td>
+                <td class="k">复查点头</td>
+                <td>
+                    执法承办人：<b th:style="${c.reviewOfficerSign==1}?'color:#2e9e4b':'color:#c00'"
+                                 th:text="${c.reviewOfficerSign==1}?'已点头':'未点'"></b>
+                    ｜台站长：<b th:style="${c.reviewChiefSign==1}?'color:#2e9e4b':'color:#c00'"
+                                th:text="${c.reviewChiefSign==1}?'已点头':'未点'"></b>
+                </td>
+            </tr>
+            <tr>
+                <td class="k">受理时刻</td><td th:text="${#dates.format(c.acceptTime,'yyyy-MM-dd HH:mm:ss')}"></td>
+                <td class="k">结案时刻</td><td th:text="${c.closeTime != null ? #dates.format(c.closeTime,'yyyy-MM-dd HH:mm:ss') : '—'}"></td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-header">
+        查处经过（一卷从头到尾每一步，系统自落办理人与时刻，旧话留底不抹）
+        <span style="float:right;">
+            <button class="pear-btn pear-btn-sm pear-btn-primary" id="btnAsc">正序列</button>
+            <button class="pear-btn pear-btn-sm" id="btnDesc">倒序列</button>
+        </span>
+    </div>
+    <div class="layui-card-body">
+        <table class="layui-table" id="ledgerAsc">
+            <thead><tr>
+                <th style="width:50px;">次序</th><th style="width:90px;">段</th><th style="width:90px;">动作</th>
+                <th style="width:110px;">办理人</th><th style="width:170px;">办理时刻</th>
+                <th>记载 / 技术意见快照 / 拆除高度</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="r : ${vo.ledgerAsc}">
+                <td th:text="${r.seq}"></td>
+                <td><span class="seg" th:text="${r.stage}"></span></td>
+                <td>
+                    <span th:if="${r.action=='SUBMIT'}" class="tag tag-submit">递交</span>
+                    <span th:if="${r.action=='SIGN'}" class="tag tag-sign"
+                          th:text="${r.signRole=='OFFICER'}?'承办人点头':'台站长点头'"></span>
+                    <span th:if="${r.action=='RETURN'}" class="tag tag-return">退回重做</span>
+                    <span th:if="${r.action=='CLOSE'}" class="tag tag-close">结案</span>
+                </td>
+                <td th:text="${r.operator}"></td>
+                <td th:text="${#dates.format(r.operateTime,'yyyy-MM-dd HH:mm:ss.SSS')}"></td>
+                <td>
+                    <span th:classappend="${r.voided==1}?'voided':''">
+                        <span th:if="${r.techDistance!=null}"
+                              th:text="'距平台 '+${r.techDistance}+' 米 / 方位 '+${r.techAzimuth}+' / 高出 '+${r.techHeight}+' 米；'"></span>
+                        <span th:if="${r.demolishHeight!=null}" th:text="'应拆 '+${r.demolishHeight}+' 米；'"></span>
+                        <span th:text="${r.content}"></span>
+                    </span>
+                    <span class="layui-badge layui-bg-gray" th:if="${r.voided==1}">旧话作废·留底</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <table class="layui-table" id="ledgerDesc" style="display:none;">
+            <thead><tr>
+                <th style="width:50px;">次序</th><th style="width:90px;">段</th><th style="width:90px;">动作</th>
+                <th style="width:110px;">办理人</th><th style="width:170px;">办理时刻</th>
+                <th>记载（倒着看，每笔与当日屏上所摆一致）</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="r : ${vo.ledgerDesc}">
+                <td th:text="${r.seq}"></td>
+                <td><span class="seg" th:text="${r.stage}"></span></td>
+                <td>
+                    <span th:if="${r.action=='SUBMIT'}" class="tag tag-submit">递交</span>
+                    <span th:if="${r.action=='SIGN'}" class="tag tag-sign"
+                          th:text="${r.signRole=='OFFICER'}?'承办人点头':'台站长点头'"></span>
+                    <span th:if="${r.action=='RETURN'}" class="tag tag-return">退回重做</span>
+                    <span th:if="${r.action=='CLOSE'}" class="tag tag-close">结案</span>
+                </td>
+                <td th:text="${r.operator}"></td>
+                <td th:text="${#dates.format(r.operateTime,'yyyy-MM-dd HH:mm:ss.SSS')}"></td>
+                <td>
+                    <span th:classappend="${r.voided==1}?'voided':''">
+                        <span th:if="${r.techDistance!=null}"
+                              th:text="'距平台 '+${r.techDistance}+' 米 / 方位 '+${r.techAzimuth}+' / 高出 '+${r.techHeight}+' 米；'"></span>
+                        <span th:if="${r.demolishHeight!=null}" th:text="'应拆 '+${r.demolishHeight}+' 米；'"></span>
+                        <span th:text="${r.content}"></span>
+                    </span>
+                    <span class="layui-badge layui-bg-gray" th:if="${r.voided==1}">旧话作废·留底</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['jquery'], function () {
+        let $ = layui.jquery;
+        $('#btnAsc').on('click', function () {
+            $('#ledgerAsc').show(); $('#ledgerDesc').hide();
+            $('#btnAsc').addClass('pear-btn-primary'); $('#btnDesc').removeClass('pear-btn-primary');
+        });
+        $('#btnDesc').on('click', function () {
+            $('#ledgerDesc').show(); $('#ledgerAsc').hide();
+            $('#btnDesc').addClass('pear-btn-primary'); $('#btnAsc').removeClass('pear-btn-primary');
+        });
+    });
+</script>
+</body>
+</html>
