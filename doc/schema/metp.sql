@@ -37,10 +37,23 @@ CREATE TABLE IF NOT EXISTS t_metp_elem_card (
 
 CREATE TABLE IF NOT EXISTS t_metp_fix_card (
   id bigint NOT NULL COMMENT '主键',
-  biz_no varchar(64) DEFAULT NULL COMMENT '探测环境违规整改卡号',
-  stage int DEFAULT NULL COMMENT '当前关口 0..5',
-  status int DEFAULT NULL COMMENT '卡的落定 0在办 1已解除 2已归档',
-  content varchar(255) DEFAULT NULL COMMENT '查处记事',
+  biz_no varchar(64) DEFAULT NULL COMMENT '卷号(一卷一号，受理时落下)',
+  building_name varchar(128) DEFAULT NULL COMMENT '违建建筑物名称(同一座建筑物判重)',
+  clue_no varchar(64) DEFAULT NULL COMMENT '来源线索编号(月初清单转入/省台重查)',
+  stage int DEFAULT NULL COMMENT '当前停在的段 1调查 2告知 3处理决定 4复查 5结案(受理即建卷，受理段已办完)',
+  status int DEFAULT NULL COMMENT '卡的落定 0在办 1已解除 2已归档(结案即死卷)',
+  horizontal_dist decimal(12,2) DEFAULT NULL COMMENT '与仪器平台的水平距离(米) 调查段落下，进告知段即冻结',
+  blocked_azimuth decimal(12,2) DEFAULT NULL COMMENT '遮挡方位角(度) 调查段落下，进告知段即冻结',
+  excess_height decimal(12,2) DEFAULT NULL COMMENT '高出仪器平台(米) 调查段落下，进告知段即冻结',
+  demolish_height decimal(12,2) DEFAULT NULL COMMENT '告知书写的拆除高度(米) 告知段落下，复查须与调查记录对得上',
+  decision_text varchar(500) DEFAULT NULL COMMENT '处理决定正文',
+  sign_round int DEFAULT '0' COMMENT '复查轮次(退回一次进一轮)',
+  officer_sign_by varchar(64) DEFAULT NULL COMMENT '本轮复查-县局执法承办人点头人',
+  officer_sign_time datetime DEFAULT NULL COMMENT '本轮复查-执法承办人点头时刻',
+  chief_sign_by varchar(64) DEFAULT NULL COMMENT '本轮复查-台站长点头人',
+  chief_sign_time datetime DEFAULT NULL COMMENT '本轮复查-台站长点头时刻',
+  open_key varchar(128) DEFAULT NULL COMMENT '在办判重键=建筑物名称；结案置空(唯一索引保证同一座建筑物在办仅一卷)',
+  content varchar(255) DEFAULT NULL COMMENT '查处记事(最近一笔)',
   last_action varchar(64) DEFAULT NULL COMMENT '最近一次过口动作',
   del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
   create_by varchar(64) DEFAULT NULL COMMENT '创建者',
@@ -48,8 +61,35 @@ CREATE TABLE IF NOT EXISTS t_metp_fix_card (
   update_by varchar(64) DEFAULT NULL COMMENT '更新者',
   update_time datetime DEFAULT NULL COMMENT '更新时间',
   remark varchar(500) DEFAULT NULL COMMENT '备注',
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_fix_card_open (open_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='探测环境违规整改事务卡';
+
+-- 查处经过：只增不改不删的事件流水。谁递的、几点几分递的由系统落下，事后补记一概不认；
+-- 退回作废旧话留底(退回一笔的 voided_seqs 指向被作废的序号)，先人记录原封不动。
+CREATE TABLE IF NOT EXISTS t_metp_fix_log (
+  id bigint NOT NULL COMMENT '主键',
+  card_id bigint NOT NULL COMMENT '所属卷主键',
+  seq int NOT NULL COMMENT '卷内序号(自1递增，卷内唯一，正倒列皆以此为准)',
+  stage int NOT NULL COMMENT '本笔所属段 0受理 1调查 2告知 3处理决定 4复查 5结案',
+  action varchar(32) NOT NULL COMMENT '过口动作 ACCEPT/INVESTIGATE/NOTIFY/DECIDE/REVIEW_SIGN/RETURN/CLOSE',
+  horizontal_dist decimal(12,2) DEFAULT NULL COMMENT '本笔落下时的水平距离快照(米)',
+  blocked_azimuth decimal(12,2) DEFAULT NULL COMMENT '本笔落下时的遮挡方位角快照(度)',
+  excess_height decimal(12,2) DEFAULT NULL COMMENT '本笔落下时的高出平台快照(米)',
+  demolish_height decimal(12,2) DEFAULT NULL COMMENT '告知笔的拆除高度(米)',
+  sign_role varchar(16) DEFAULT NULL COMMENT '复查点头角色 OFFICER执法承办人/CHIEF台站长',
+  sign_round int DEFAULT NULL COMMENT '复查点头所属轮次',
+  from_stage int DEFAULT NULL COMMENT '退回笔：退回前所在段',
+  to_stage int DEFAULT NULL COMMENT '退回笔：退到那一段',
+  voided_seqs varchar(255) DEFAULT NULL COMMENT '退回笔：被作废旧话的卷内序号(逗号分隔，留底不抹)',
+  content varchar(500) DEFAULT NULL COMMENT '本笔记事',
+  operator varchar(64) NOT NULL COMMENT '递交人(系统落下，不认补记)',
+  operate_time datetime NOT NULL COMMENT '递交时刻(系统落下，不认补记)',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_fix_log_seq (card_id, seq),
+  KEY idx_fix_log_card (card_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='查处经过流水(只增不改不删)';
 
 CREATE TABLE IF NOT EXISTS t_metp_move_bill (
   id bigint NOT NULL COMMENT '主键',

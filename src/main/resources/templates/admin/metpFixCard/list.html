@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('探测环境违规整改查处台账')"/>
+</head>
+<body class="pear-container">
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" action="">
+            <div class="layui-form-item">
+                <label class="layui-form-label">卷号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="bizNo" placeholder="一卷一号" class="layui-input">
+                </div>
+                <label class="layui-form-label">建筑物</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="buildingName" placeholder="同一座建筑物不另开第二卷" class="layui-input">
+                </div>
+                <label class="layui-form-label">落定</label>
+                <div class="layui-input-inline">
+                    <select name="status">
+                        <option value="">全部</option>
+                        <option value="0">在办</option>
+                        <option value="2">已结案(死卷)</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="fix-query">
+                    <i class="layui-icon layui-icon-search"></i> 查询
+                </button>
+                <button type="reset" class="pear-btn pear-btn-md">
+                    <i class="layui-icon layui-icon-refresh"></i> 重置
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="fix-table" lay-filter="fix-table"></table>
+    </div>
+</div>
+
+<script type="text/html" id="fix-toolbar">
+    <button shiro:hasPermission="metpFixCard:intake" class="pear-btn pear-btn-primary pear-btn-md" lay-event="intake">
+        <i class="layui-icon layui-icon-add-1"></i> 线索清单转入（受理）
+    </button>
+</script>
+
+<script type="text/html" id="fix-stage">
+    {{# if(d.status==2){ }}<span class="layui-badge">已结案·死卷</span>
+    {{# } else { }}
+    <span class="layui-badge layui-bg-blue">{{ ['','调查','告知','处理决定','复查','结案'][d.stage] || '未知' }}</span>
+    {{# } }}
+</script>
+
+<script type="text/html" id="fix-bar">
+    <button class="pear-btn pear-btn-warming pear-btn-sm" lay-event="trail" title="查处经过"><i class="layui-icon layui-icon-log"></i></button>
+    {{# if(d.status!=2){ }}
+    <button shiro:hasPermission="metpFixCard:submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="investigate" {{ d.stage!=1?'disabled':'' }} title="调查">调查</button>
+    <button shiro:hasPermission="metpFixCard:submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="notify" {{ d.stage!=2?'disabled':'' }} title="告知">告知</button>
+    <button shiro:hasPermission="metpFixCard:submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="decide" {{ d.stage!=3?'disabled':'' }} title="处理决定">决定</button>
+    <button shiro:hasPermission="metpFixCard:sign" class="pear-btn pear-btn-normal pear-btn-sm" lay-event="sign" {{ d.stage!=4?'disabled':'' }} title="复查点头">复查</button>
+    <button shiro:hasPermission="metpFixCard:return" class="pear-btn pear-btn-warming pear-btn-sm" lay-event="ret" {{ d.stage!=4?'disabled':'' }} title="退回告知段">退回</button>
+    <button shiro:hasPermission="metpFixCard:close" class="pear-btn pear-btn-danger pear-btn-sm" lay-event="close" {{ d.stage!=5?'disabled':'' }} title="结案">结案</button>
+    <button shiro:hasPermission="metpFixCard:remove" class="pear-btn pear-btn-danger pear-btn-sm" lay-event="remove" title="抽卷"><i class="layui-icon layui-icon-delete"></i></button>
+    {{# } }}
+</script>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['table', 'form', 'jquery'], function () {
+        let table = layui.table;
+        let form = layui.form;
+        let $ = layui.jquery;
+        let PATH = rootPath + "/metpFixCard";
+
+        table.render({
+            elem: '#fix-table',
+            url: PATH + '/list',
+            page: true,
+            method: 'get',
+            skin: 'line',
+            toolbar: '#fix-toolbar',
+            cols: [[
+                {title: 'ID', field: 'id', align: 'center', hide: true},
+                {title: '卷号', field: 'bizNo', width: 200},
+                {title: '建筑物', field: 'buildingName', width: 160},
+                {title: '此刻停在', field: 'stage', width: 130, toolbar: '#fix-stage'},
+                {title: '水平距离(米)', field: 'horizontalDist', width: 110},
+                {title: '遮挡方位角', field: 'blockedAzimuth', width: 100},
+                {title: '高出平台(米)', field: 'excessHeight', width: 110},
+                {title: '拆除高度(米)', field: 'demolishHeight', width: 110},
+                {title: '执法承办人', field: 'officerSignBy', width: 110},
+                {title: '台站长', field: 'chiefSignBy', width: 110},
+                {title: '最近动作', field: 'lastAction', width: 100},
+                {title: '办理', toolbar: '#fix-bar', width: 430, fixed: 'right'}
+            ]]
+        });
+
+        form.on('submit(fix-query)', function (data) {
+            table.reload('fix-table', {where: data.field});
+            return false;
+        });
+
+        function post(url, data, done) {
+            let loading = layer.load();
+            $.ajax({url: PATH + url, data: data, type: 'post', success: function (r) {
+                layer.close(loading);
+                if (r.code === 200) { layer.msg(r.msg, {icon: 1, time: 900}, function () { table.reload('fix-table'); if (done) done(r); }); }
+                else { layer.msg(r.msg, {icon: 2}); }
+            }});
+        }
+
+        table.on('toolbar(fix-table)', function (obj) {
+            if (obj.event === 'intake') {
+                layer.prompt({title: '线索清单转入：每行「建筑物名称,线索编号」', formType: 2, area: ['420px', '240px']}, function (text, idx) {
+                    let clues = text.split('\n').map(function (l) {
+                        let p = l.split(',');
+                        return {buildingName: (p[0] || '').trim(), clueNo: (p[1] || '').trim()};
+                    }).filter(function (c) { return c.buildingName; });
+                    layer.close(idx);
+                    let loading = layer.load();
+                    $.ajax({url: PATH + '/intake', contentType: 'application/json', data: JSON.stringify(clues), type: 'post',
+                        success: function (r) { layer.close(loading); layer.msg(r.msg, {icon: 1}, function () { table.reload('fix-table'); }); }});
+                });
+            }
+        });
+
+        table.on('tool(fix-table)', function (obj) {
+            let d = obj.data;
+            if (obj.event === 'investigate') {
+                layer.prompt({title: '调查技术意见：水平距离(米),遮挡方位角(度),高出平台(米)', value: '300,270,12'}, function (v, i) {
+                    let p = v.split(',');
+                    layer.close(i);
+                    post('/submitInvestigate', {id: d.id, horizontalDist: p[0], blockedAzimuth: p[1], excessHeight: p[2]});
+                });
+            } else if (obj.event === 'notify') {
+                layer.prompt({title: '告知：拆除高度(米)（技术意见照调查段取，改不得）', value: d.excessHeight}, function (v, i) {
+                    layer.close(i);
+                    post('/submitNotify', {id: d.id, demolishHeight: v});
+                });
+            } else if (obj.event === 'decide') {
+                layer.prompt({title: '处理决定正文', formType: 2}, function (v, i) {
+                    layer.close(i);
+                    post('/submitDecide', {id: d.id, decisionText: v});
+                });
+            } else if (obj.event === 'sign') {
+                layer.open({
+                    type: 1, title: '复查点头（执法承办人与台站长各一次）', area: ['360px', '200px'],
+                    content: '<div style="padding:30px;text-align:center">'
+                        + '<button class="pear-btn pear-btn-primary" id="sign-officer" style="margin:8px">县局执法承办人点头</button>'
+                        + '<button class="pear-btn pear-btn-primary" id="sign-chief" style="margin:8px">台站长点头</button></div>',
+                    success: function () {
+                        $('#sign-officer').on('click', function () { post('/reviewSign', {id: d.id, role: 'OFFICER'}); });
+                        $('#sign-chief').on('click', function () { post('/reviewSign', {id: d.id, role: 'CHIEF'}); });
+                    }
+                });
+            } else if (obj.event === 'ret') {
+                layer.prompt({title: '退回告知段：拆除高度与调查记录对不上，写明由头', formType: 2}, function (v, i) {
+                    layer.close(i);
+                    post('/returnToNotify', {id: d.id, reason: v});
+                });
+            } else if (obj.event === 'close') {
+                layer.confirm('结案即死卷：不许再挂记事、不许抽卷、不许抹中间记载。确认结案？', {icon: 3}, function (i) {
+                    layer.close(i);
+                    post('/submitClose', {id: d.id});
+                });
+            } else if (obj.event === 'remove') {
+                layer.confirm('结案死卷不许抽；在办卷软删且查处经过留底。确认抽卷？', {icon: 3}, function (i) {
+                    layer.close(i);
+                    post('/remove', {id: d.id});
+                });
+            } else if (obj.event === 'trail') {
+                showTrail(d.id);
+            }
+        });
+
+        function showTrail(id) {
+            let asc = true;
+            let load = function () {
+                $.get(PATH + '/trail', {id: id, asc: asc}, function (r) {
+                    let rows = (r.data || []).map(function (l) {
+                        return '<tr style="border-bottom:1px solid #eee">'
+                            + '<td style="padding:4px 8px">' + l.seq + '</td>'
+                            + '<td style="padding:4px 8px">[' + (['受理','调查','告知','处理决定','复查','结案'][l.stage]||'') + '] ' + l.action
+                            + (l.voidedSeqs ? '<span style="color:#c00">（作废#' + l.voidedSeqs + '，留底）</span>' : '') + '</td>'
+                            + '<td style="padding:4px 8px">' + (l.content || '')
+                            + (l.horizontalDist != null ? '；水平距离' + l.horizontalDist + '米' : '')
+                            + (l.blockedAzimuth != null ? '；方位角' + l.blockedAzimuth + '°' : '')
+                            + (l.excessHeight != null ? '；高出' + l.excessHeight + '米' : '')
+                            + (l.demolishHeight != null ? '；拆高' + l.demolishHeight + '米' : '')
+                            + (l.signRole ? '；' + (l.signRole === 'OFFICER' ? '执法承办人' : '台站长') + '点头' : '') + '</td>'
+                            + '<td style="padding:4px 8px">' + l.operator + '</td>'
+                            + '<td style="padding:4px 8px">' + (l.operateTime || '') + '</td></tr>';
+                    }).join('');
+                    $('#fix-trail-body').html(rows);
+                });
+            };
+            layer.open({
+                type: 1, title: '查处经过（一笔一笔由系统落下，事后补记不认）', area: ['900px', '560px'],
+                content: '<div style="padding:10px"><button class="pear-btn pear-btn-md" id="fix-trail-order">当前：正序（点此切倒序）</button>'
+                    + '<table style="width:100%;margin-top:8px;font-size:13px"><thead><tr style="background:#f5f5f5">'
+                    + '<th style="padding:6px;width:50px">序号</th><th style="padding:6px;width:180px">段/动作</th>'
+                    + '<th style="padding:6px">记事与数据快照</th><th style="padding:6px;width:100px">递交人</th>'
+                    + '<th style="padding:6px;width:160px">时刻</th></tr></thead><tbody id="fix-trail-body"></tbody></table></div>',
+                success: load
+            });
+            $(document).off('click', '#fix-trail-order').on('click', '#fix-trail-order', function () {
+                asc = !asc;
+                $(this).text(asc ? '当前：正序（点此切倒序）' : '当前：倒序（点此切正序）');
+                load();
+            });
+        }
+    });
+</script>
+</body>
+</html>

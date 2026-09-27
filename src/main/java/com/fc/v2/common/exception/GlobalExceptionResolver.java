@@ -108,6 +108,15 @@ public class GlobalExceptionResolver{
     {
         return AjaxResult.error("演示模式，不允许操作");
     }
+
+    /**
+     * 查处卷宗流转被拒（跳段/重复递交/死卷再办/复查未点齐等）：接口回话说了算
+     */
+    @ExceptionHandler(FixFlowException.class)
+    public AjaxResult fixFlowException(FixFlowException e)
+    {
+        return AjaxResult.error(e.getMessage());
+    }
     
     /**
      * 拦截未知的运行时异常
